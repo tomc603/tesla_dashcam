@@ -1,7 +1,10 @@
 """
-Merges the 3 Tesla Dashcam and Sentry camera video files into 1 video. If
-then further concatenates the files together to make 1 movie.
+Merge Tesla camera footage into a single video.
+
+This script merges the 3 Tesla dashcam video files into a single video,
+ then concatenates the videos from a 10 minute folder.
 """
+
 import argparse
 import os
 import shutil
@@ -23,6 +26,7 @@ VERSION = {
     'patch': 9,
     'beta': -1,
 }
+
 VERSION_STR = 'v{major}.{minor}.{patch}'.format(
     major=VERSION['major'],
     minor=VERSION['minor'],
@@ -170,24 +174,23 @@ VALIGN = {
 
 # noinspection PyCallByClass,PyProtectedMember,PyProtectedMember
 class SmartFormatter(argparse.HelpFormatter):
-    """ Formatter for argument help. """
+    """Formatter for argument help."""
 
     def _split_lines(self, text, width):
-        """ Provide raw output allowing for prettier help output """
+        """Provide raw output allowing for prettier help output."""
         if text.startswith('R|'):
             return text[2:].splitlines()
         # this is the RawTextHelpFormatter._split_lines
         return argparse.HelpFormatter._split_lines(self, text, width)
 
     def _get_help_string(self, action):
-        """ Call default help string """
+        """Call default help string."""
         return argparse.ArgumentDefaultsHelpFormatter._get_help_string(self,
                                                                        action)
 
 
 def check_latest_release(include_beta):
-    """ Checks GitHub for latest release """
-
+    """Check GitHub for latest release."""
     url = '{url}/repos/{owner}/{repo}/releases'.format(
         url=GITHUB['URL'],
         owner=GITHUB['owner'],
@@ -214,7 +217,7 @@ def check_latest_release(include_beta):
 
 
 def get_tesladashcam_folder():
-    """ Check if there is a drive mounted with the Tesla DashCam folder."""
+    """Check if there is a drive mounted with the Tesla DashCam folder."""
     for partition in disk_partitions(all=False):
         if 'cdrom' in partition.opts or partition.fstype == '':
             continue
@@ -227,7 +230,7 @@ def get_tesladashcam_folder():
 
 
 def get_movie_files(source_folder, exclude_subdirs, ffmpeg):
-    """ Find all the clip files within folder (and subfolder if requested) """
+    """Find all the clip files within folder (and subfolder if requested)."""
     # Retrieve all the video files in current path:
     search_path = os.path.join(source_folder, '*.mp4')
     files = (glob(search_path))
@@ -249,7 +252,7 @@ def get_movie_files(source_folder, exclude_subdirs, ffmpeg):
         movie_file_list = folder_list.get(movie_folder, {})
 
         # Check if we already processed this timestamp.
-        if movie_file_list.get(filename_timestamp) is not None:
+        if movie_file_list.get(filename_timestamp):
             # Already processed this timestamp, moving on.
             continue
 
@@ -344,7 +347,7 @@ def get_movie_files(source_folder, exclude_subdirs, ffmpeg):
 
 
 def get_metadata(ffmpeg, filenames):
-    """ Retrieve the meta data for the clip (i.e. timestamp, duration) """
+    """Retrieve the meta data for the clip (i.e. timestamp, duration)."""
     # Get meta data for each video to determine creation time and duration.
     ffmpeg_command = [
         ffmpeg,
@@ -364,7 +367,7 @@ def get_metadata(ffmpeg, filenames):
     video_timestamp = None
     wait_for_input_line = True
     for line in command_result.stderr.splitlines():
-        if search("^Input #", line) is not None:
+        if search("^Input #", line):
             file = filenames[input_counter]
             input_counter += 1
             video_timestamp = None
@@ -374,13 +377,13 @@ def get_metadata(ffmpeg, filenames):
         if wait_for_input_line:
             continue
 
-        if search("^ *creation_time ", line) is not None:
+        if search("^ *creation_time ", line):
             line_split = line.split(':', 1)
             video_timestamp = datetime.strptime(line_split[1].strip(),
                                                 "%Y-%m-%dT%H:%M:%S.%f%z")
             continue
 
-        if search("^ *Duration: ", line) is not None:
+        if search("^ *Duration: ", line):
             line_split = line.split(',')
             line_split = line_split[0].split(':', 1)
             duration_list = line_split[1].split(':')
@@ -410,25 +413,27 @@ def create_intermediate_movie(filename_timestamp,
                               video_settings,
                               clip_number,
                               total_clips):
-    """ Create intermediate movie files. This is the merging of the 3 camera
+    """
+    Create intermediate movie files.
 
-    video files into 1 video file. """
+    This is the merging of the 3 camera video files into 1 video file.
+    """
     # We first stack (combine the 3 different camera video files into 1
     # and then we concatenate.
     camera_1 = None
-    if video['video_info']['front_camera']['filename'] is not None:
+    if video['video_info']['front_camera']['filename']:
         camera_1 = os.path.join(
             video['movie_folder'],
             video['video_info']['front_camera']['filename'])
 
     left_camera = None
-    if video['video_info']['left_camera']['filename'] is not None:
+    if video['video_info']['left_camera']['filename']:
         left_camera = os.path.join(
             video['movie_folder'],
             video['video_info']['left_camera']['filename'])
 
     right_camera = None
-    if video['video_info']['right_camera']['filename'] is not None:
+    if video['video_info']['right_camera']['filename']:
         right_camera = os.path.join(
             video['movie_folder'],
             video['video_info']['right_camera']['filename'])
@@ -453,7 +458,7 @@ def create_intermediate_movie(filename_timestamp,
     speed = video_settings['movie_speed']
     # Confirm if files exist, if not replace with nullsrc
     input_count = 0
-    if camera_0 is not None and os.path.isfile(camera_0):
+    if camera_0 and os.path.isfile(camera_0):
         ffmpeg_command_0 = [
             '-i',
             camera_0
@@ -469,7 +474,7 @@ def create_intermediate_movie(filename_timestamp,
             height=MOVIE_LAYOUT[movie_layout]['clip_y'],
         ) + '[left];'
 
-    if camera_1 is not None and os.path.isfile(camera_1):
+    if camera_1 and os.path.isfile(camera_1):
         ffmpeg_command_1 = [
             '-i',
             camera_1
@@ -486,7 +491,7 @@ def create_intermediate_movie(filename_timestamp,
             height=MOVIE_LAYOUT[movie_layout]['clip_y'],
         ) + '[front];'
 
-    if camera_2 is not None and os.path.isfile(camera_2):
+    if camera_2 and os.path.isfile(camera_2):
         ffmpeg_command_2 = [
             '-i',
             camera_2
@@ -574,7 +579,7 @@ def create_intermediate_movie(filename_timestamp,
 
 
 def create_movie(clips_list, movie_filename, video_settings):
-    """ Concatenate provided movie files into 1."""
+    """Concatenate provided movie files into 1."""
     # Just return if there are no clips.
     if not clips_list:
         return None
@@ -680,9 +685,9 @@ def create_movie(clips_list, movie_filename, video_settings):
 
 
 def delete_intermediate(movie_files):
-    """ Delete the files provided in list """
+    """Delete the files provided in list."""
     for file in movie_files:
-        if file is not None:
+        if file:
             if os.path.isfile(file):
                 try:
 
@@ -702,7 +707,7 @@ def delete_intermediate(movie_files):
 
 
 def process_folders(folders, video_settings, skip_existing, delete_source):
-    """ Process all clips found within folders. """
+    """Process all clips found within folders."""
     start_time = timestamp()
 
     total_clips = 0
@@ -759,25 +764,25 @@ def process_folders(folders, video_settings, skip_existing, delete_source):
                 len(files)
             )
 
-            if clip_name is not None:
+            if clip_name:
                 # Movie was created, store name for concatenation.
                 folder_clips.append(clip_name)
 
                 # Add the files to our list for removal.
                 video_info = video_timestamp_info['video_info']
-                if video_info['front_camera']['filename'] is not None:
+                if video_info['front_camera']['filename']:
                     delete_file_list.append(
                         os.path.join(
                             video_timestamp_info['movie_folder'],
                             video_info['front_camera']['filename']))
 
-                if video_info['left_camera']['filename'] is not None:
+                if video_info['left_camera']['filename']:
                     delete_file_list.append(
                         os.path.join(
                             video_timestamp_info['movie_folder'],
                             video_info['left_camera']['filename']))
 
-                if video_info['right_camera']['filename'] is not None:
+                if video_info['right_camera']['filename']:
                     delete_file_list.append(
                         os.path.join(
                             video_timestamp_info['movie_folder'],
@@ -797,7 +802,7 @@ def process_folders(folders, video_settings, skip_existing, delete_source):
         )
 
         # Add this one to our list for final concatenation
-        if movie_name is not None:
+        if movie_name:
             dashcam_clips.append(movie_name)
             # Delete the intermediate files we created.
             if not video_settings['keep_intermediate']:
@@ -834,7 +839,7 @@ def process_folders(folders, video_settings, skip_existing, delete_source):
             video_settings,
         )
 
-    if movie_name is not None:
+    if movie_name:
         print("Movie {base_name} has been created, enjoy.".format(
             base_name=movie_name))
     else:
@@ -850,7 +855,7 @@ def process_folders(folders, video_settings, skip_existing, delete_source):
         real=str(timedelta(seconds=real)),
     ))
     if video_settings['notification']:
-        if movie_name is not None:
+        if movie_name:
             notify("TeslaCam", "Completed",
                    "{total_folders} folder{folders} with {total_clips} "
                    "clip{clips} have been processed, movie {movie_name} has "
@@ -876,9 +881,12 @@ def process_folders(folders, video_settings, skip_existing, delete_source):
 
 
 def resource_path(relative_path):
-    """ Return absolute path for provided relative item based on location
+    """
+    Return a path to the resource.
 
-    of program.
+    Return a path for the requested resource relative to the current
+    script file, or relative to sys._MEIPASS temporary folder used by
+    PyInstaller.
     """
     # If compiled with pyinstaller then sys._MEIPASS points to the location
     # of the bundle. Otherwise path of python script is used.
@@ -887,7 +895,7 @@ def resource_path(relative_path):
 
 
 def notify_macos(title, subtitle, message):
-    """ Notification on MacOS """
+    """Notification on MacOS."""
     try:
         run(['osascript',
              '-e display notification "{message}" with title "{title}" '
@@ -902,7 +910,7 @@ def notify_macos(title, subtitle, message):
 
 
 def notify_windows(title, subtitle, message):
-    """ Notification on Windows """
+    """Notification on Windows."""
     try:
         from win10toast import ToastNotifier
         ToastNotifier().show_toast(
@@ -924,7 +932,7 @@ def notify_windows(title, subtitle, message):
 
 
 def notify_linux(title, subtitle, message):
-    """ Notification on Linux """
+    """Notification on Linux."""
     try:
         run(['notify-send',
              '"{title} {subtitle}"'.format(
@@ -937,7 +945,7 @@ def notify_linux(title, subtitle, message):
 
 
 def notify(title, subtitle, message):
-    """ Call function to send notification based on OS """
+    """Call function to send notification based on OS."""
     if sys.platform == 'darwin':
         notify_macos(title, subtitle, message)
     elif sys.platform == 'win32':
@@ -947,9 +955,11 @@ def notify(title, subtitle, message):
 
 
 def main() -> None:
-    """ Main function """
-
-    internal_ffmpeg = getattr(sys, 'frozen', None) is not None
+    """Main function."""
+    # If all we want is a True/False whether we're in a PyInstaller bundle
+    # just return False when we're not. No complex, hard to follow logic
+    # necessary.
+    internal_ffmpeg = getattr(sys, 'frozen', False)
     ffmpeg_default = resource_path(FFMPEG.get(sys.platform, 'ffmpeg'))
 
     # Check if ffmpeg exist, if not then hope it is in default path or
@@ -1306,7 +1316,7 @@ def main() -> None:
         release_info = check_latest_release(args.include_beta)
 
         new_version = False
-        if release_info.get('tag_name') is not None:
+        if release_info.get('tag_name'):
             github_version = release_info.get('tag_name').split('.')
             if len(github_version) == 3:
                 # Release tags normally start with v. If that is the case
@@ -1448,7 +1458,7 @@ def main() -> None:
     filter_label = '[tmp{filter_counter}];[tmp{filter_counter}] '
     ffmpeg_timestamp = ''
     if not args.no_timestamp:
-        if args.font is not None and args.font != '':
+        if args.font and args.font != '':
             font_file = args.font
         else:
             font_file = DEFAULT_FONT.get(sys.platform, None)
@@ -1477,8 +1487,8 @@ def main() -> None:
         ffmpeg_timestamp = ffmpeg_timestamp + \
             "text='%{{pts\:localtime\:{epoch_time}\:%x %X}}'"
 
-    speed = args.slow_down if args.slow_down is not None else ''
-    speed = 1 / args.speed_up if args.speed_up is not None else speed
+    speed = args.slow_down if args.slow_down else ''
+    speed = 1 / args.speed_up if args.speed_up else speed
     ffmpeg_speed = ''
     if speed != '':
         ffmpeg_speed = filter_label.format(
